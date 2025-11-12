@@ -57,6 +57,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        "user-message": "hsl(var(--user-message-bg))",
+        "bot-message": {
+          DEFAULT: "hsl(var(--bot-message-bg))",
+          border: "hsl(var(--bot-message-border))",
+        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui'],
       },
       borderRadius: {
         lg: "var(--radius)",
