@@ -21,10 +21,35 @@ interface Conversation {
   messages: Message[];
 }
 
+const WELCOME_MESSAGES = [
+  "👋 ¡Hola! Soy Vocare, tu asistente laboral.\n\nPuedo analizar tu CV o tus intereses y recomendarte las mejores oportunidades laborales.\n\n¿Quieres subir tu currículum o contarme sobre ti?",
+  "¡Hola! 🌟 Me llamo Vocare y estoy aquí para ayudarte a encontrar oportunidades laborales que se ajusten a tu perfil.\n\n¿Tienes tu CV a mano o prefieres contarme sobre tu experiencia?",
+  "¡Bienvenido! 💼 Soy Vocare, tu compañero en la búsqueda laboral.\n\nPuedo revisar tu currículum o simplemente conversar sobre tus intereses profesionales.\n\n¿Cómo te gustaría empezar?",
+];
+
+const GENERAL_RESPONSES = [
+  "Entiendo 👍 Cuéntame más sobre lo que buscas y te ayudaré a encontrar las mejores opciones.",
+  "Genial, gracias por contarme eso. Creo que tengo algo que podría interesarte 🌟",
+  "Perfecto 🙌 Déjame buscar opciones que encajen con tu perfil.",
+  "Me parece muy interesante tu experiencia. ¿Hay algún área específica en la que te gustaría trabajar?",
+  "Excelente punto. Basándome en lo que me cuentas, puedo recomendarte algunas ofertas. ¿Quieres que busquemos juntos?",
+  "Eso suena bien 💬 ¿Te gustaría que te muestre algunas oportunidades relacionadas?",
+];
+
+const CV_ANALYSIS_RESPONSES = [
+  "¡Listo! 📄 He revisado tu CV y veo que tienes un perfil muy interesante. Déjame buscar ofertas que coincidan con tu experiencia.",
+  "Perfecto, ya analicé tu currículum 🌟 Veo experiencia valiosa aquí. Te voy a recomendar algunas oportunidades que podrían encajar muy bien.",
+  "Excelente CV 💼 He identificado tus fortalezas y áreas de interés. ¿Te gustaría ver las ofertas que más se ajustan a tu perfil?",
+  "¡Muy bien! Ya revisé tu información. Tu experiencia es relevante para varias posiciones que tengo en mente. ¿Empezamos a explorar opciones?",
+];
+
+const getRandomMessage = (messages: string[]) => 
+  messages[Math.floor(Math.random() * messages.length)];
+
 const WELCOME_MESSAGE: Message = {
   id: "welcome",
   role: "assistant",
-  content: "👋 ¡Hola! Soy Vocare, tu asistente laboral.\n\nPuedo analizar tu CV o tus intereses y recomendarte las mejores oportunidades laborales.\n\n¿Quieres subir tu currículum o contarme sobre ti?",
+  content: getRandomMessage(WELCOME_MESSAGES),
 };
 
 const Index = () => {
@@ -71,7 +96,7 @@ const Index = () => {
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Entiendo que estás buscando oportunidades laborales. He analizado tu perfil y tengo algunas recomendaciones para ti. ¿Podrías contarme más sobre tus intereses y experiencia?",
+        content: getRandomMessage(GENERAL_RESPONSES),
       };
 
       setConversations((prev) =>
@@ -99,7 +124,7 @@ const Index = () => {
       const botMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: "He analizado tu CV exitosamente. Veo que tienes experiencia en desarrollo web y diseño UX. Te recomendaré las mejores ofertas que coincidan con tu perfil.",
+        content: getRandomMessage(CV_ANALYSIS_RESPONSES),
       };
 
       setConversations((prev) =>
@@ -121,7 +146,11 @@ const Index = () => {
       id: Date.now().toString(),
       title: "Nueva conversación",
       lastUpdated: "Ahora",
-      messages: [WELCOME_MESSAGE],
+      messages: [{
+        id: "welcome-" + Date.now(),
+        role: "assistant",
+        content: getRandomMessage(WELCOME_MESSAGES),
+      }],
     };
     setConversations((prev) => [...prev, newConv]);
     setActiveConversationId(newConv.id);
