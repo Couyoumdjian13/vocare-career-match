@@ -1,4 +1,3 @@
-// server/server.ts
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -24,14 +23,14 @@ try {
   console.warn("⚠️ No se encontró el archivo", ofertasPath);
 }
 
-// Estado global simple
+// Estado global simple (un solo usuario / demo)
 let cvGuardado: string | null = null;
 let contextoTrabajo = false;
 let areaDefinida: string | null = null;
 let modalidadDefinida: "remoto" | "hibrido" | "presencial" | "cualquiera" | null = null;
 let ubicacionDefinida: string | null = null;
 
-// NUEVO: flujo de preguntas pendiente
+// Flujo de preguntas: área → modalidad → ubicación
 let pasoPendiente: "area" | "modalidad" | "ubicacion" | null = null;
 
 // Helper para resetear conversación (y opcionalmente CV)
@@ -56,7 +55,7 @@ app.post("/api/cv", (req, res) => {
     return res.status(400).json({ error: "CV inválido o muy corto" });
   }
 
-  // 🔄 Cada vez que se sube un CV nuevo, reiniciamos TODO (incluyendo CV anterior)
+  // Cada vez que se sube un CV nuevo, reiniciamos TODO (incluyendo CV anterior)
   resetConversacion(false);
   cvGuardado = cv;
 
@@ -90,13 +89,13 @@ app.post("/api/chat", async (req, res) => {
 
   // ¿Este mensaje habla de trabajo?
   const hablaTrabajoAhora =
-    /trabajo|empleo|oferta|ofertas|trabajar|recomienda|recomendación|recomendacion|recomiéndame|recomiendame|estudio|carrera|vocación|vocacion|profesion|profesión/i.test(
+    /trabajo|empleo|oferta|ofertas|trabajar|recomienda|recomendación|recomendacion|recomiéndame|recomiendame|carrera|vocación|vocacion|profesion|profesión/i.test(
       message
     );
 
   if (hablaTrabajoAhora) {
     contextoTrabajo = true;
-    // Si recién entra al tema laboral y no tenemos área aún, arrancamos el flujo
+    // Si recién entra al tema laboral y no tenemos área, arrancamos el flujo ahí
     if (!areaDefinida && !pasoPendiente) {
       pasoPendiente = "area";
     }
@@ -105,109 +104,142 @@ app.post("/api/chat", async (req, res) => {
   const hablaTrabajo = contextoTrabajo;
   const tieneCV = Boolean(cvGuardado);
 
-  // ── Detección básica en el MENSAJE ACTUAL ─────────────────
-
-  const mencionaAreaActual =
-    /datos|data|analista de datos|analytics|desarrollo|developer|programación|programador|software|backend|front[- ]?end|frontend|full[- ]?stack|soporte|ciberseguridad|seguridad|ux|diseño|diseñador|marketing|producto|product manager|qa|testing|infraestructura|devops/i.test(
-      message
-    );
+  // ─────────────────────────────────────────────
+  // DETECCIÓN BÁSICA EN ESTE MENSAJE
+  // (pero el flujo manda, no solo las palabras)
+  // ─────────────────────────────────────────────
 
   const usaCvComoArea =
     /usa .*cv|usa lo que aparece en mi cv|usa lo que sale en mi cv|usa lo de mi cv|usa mi cv/i.test(
       message
     );
 
-  const mencionaRemoto = /remoto/i.test(message);
-  const mencionaHibrido = /híbrido|hibrido/i.test(message);
-  const mencionaPresencial = /presencial/i.test(message);
-  const mencionaIndiferente = /me da lo mismo|no importa|cualquiera/i.test(message);
+  // Modalidad
+  const mencionaRemoto = /\bremoto\b|\Remoto\b/i.test(message);
+  const mencionaHibrido = /\bhíbrido\b|\bhibrido\b|\bHíbrido\b|\bHibrido\b/i.test(message);
+  const mencionaPresencial = /\bpresencial\b|\bPresencial\b/i.test(message);
+  const mencionaIndiferente =
+    /\bme da lo mismo\b|\bno importa\b|\bcualquiera\b|\bMe da lo mismo\b|\bNo importa\b|\bCualquiera\b/i.test(message);
 
-  const mencionaUbicacionActual =
-    /santiago|rm\b|región metropolitana|region metropolitana|valparaíso|valparaiso|antofagasta|biobío|biobio|concepción|conce\b|chile/i.test(
-      message
-    );
+  // Ubicación: muy simple, pero permitimos cualquier texto si está en flujo
+  const ubicacionesTipicas = [
+    "santiago",
+    "rm",
+    "region metropolitana",
+    "region metropolitana",
+    "valparaíso",
+    "valparaiso",
+    "arica", 
+    "tarapacá", 
+    "tarapaca", 
+    "calama", 
+    "iquique", 
+    "coquimbo", 
+    "viña", 
+    "viña del mar", 
+    "los andes",  
+    "rancagua",
+    "temuco", 
+    "osorno", 
+    "puerto montt", 
+    "puerto varas", 
+    "punta arenas", 
+    "antofagasta",
+    "biobío",
+    "biobio",
+    "concepción",
+    "conce",
+    "chile",
+    "Santiago",
+    "RM",
+    "Region metropolitana",
+    "Region metropolitana",
+    "Valparaíso",
+    "Valparaiso",
+    "Arica", 
+    "Tarapacá", 
+    "Tarapaca", 
+    "Calama", 
+    "Iquique", 
+    "Coquimbo", 
+    "Viña", 
+    "Viña del mar", 
+    "Los Andes",  
+    "Rancagua",
+    "Temuco", 
+    "Osorno", 
+    "Puerto Montt", 
+    "Puerto Varas", 
+    "Punta Arenas", 
+    "Antofagasta",
+    "Biobío",
+    "Biobio",
+    "Concepción",
+    "Conce",
+    "Chile",
+  ];
+  const ubicacionDetectada = ubicacionesTipicas.find((u) =>
+    new RegExp("\\b" + u + "\\b", "i").test(message)
+  );
 
-  // ── APLICAR RESPUESTA AL FLUJO PENDIENTE ─────────────────
+  // ─────────────────────────────────────────────
+  // APLICAR RESPUESTA AL FLUJO PENDIENTE
+  // ─────────────────────────────────────────────
 
-  // Si no hay ningún paso pendiente pero sí hablamos de trabajo y no hay área,
-  // aseguramos que el siguiente turno se use para preguntar área.
-  if (hablaTrabajo && !areaDefinida && !pasoPendiente) {
-    pasoPendiente = "area";
-  }
-
-  // 1) Si estamos esperando ÁREA
+  // Si estamos en flujo de preguntas, lo que manda es "pasoPendiente"
+  // 1) Esperando ÁREA
   if (pasoPendiente === "area") {
     if (usaCvComoArea) {
       areaDefinida = "desde_cv";
       pasoPendiente = "modalidad";
-    } else if (mencionaAreaActual || message.length > 2) {
-      // Si respondió algo que parece un área, lo tomamos
-      areaDefinida = message;
+    } else if (message.trim().length > 1) {
+      // ÁREA LIBRE: cualquier texto sirve ("optimización", "minería", etc.)
+      areaDefinida = message.trim();
       pasoPendiente = "modalidad";
     }
   }
 
-  // 2) Si estamos esperando MODALIDAD
+  // 2) Esperando MODALIDAD
   if (pasoPendiente === "modalidad") {
     if (mencionaIndiferente) {
       modalidadDefinida = "cualquiera";
-      pasoPendiente = null; // no necesitamos ubicación
+      pasoPendiente = null; // no necesitamos ubicación obligatoria
     } else if (mencionaRemoto) {
       modalidadDefinida = "remoto";
-      pasoPendiente = null; // remoto => ubicación opcional
+      pasoPendiente = null; // remoto → ubicación opcional
     } else if (mencionaHibrido) {
       modalidadDefinida = "hibrido";
-      pasoPendiente = "ubicacion"; // híbrido => pedir ubicación
+      pasoPendiente = "ubicacion"; // híbrido → preguntar ubicación
     } else if (mencionaPresencial) {
       modalidadDefinida = "presencial";
-      pasoPendiente = "ubicacion"; // presencial => pedir ubicación
+      pasoPendiente = "ubicacion"; // presencial → preguntar ubicación
     }
   }
 
-  // 3) Si estamos esperando UBICACIÓN
+  // 3) Esperando UBICACIÓN
   if (pasoPendiente === "ubicacion") {
     if (mencionaIndiferente) {
       ubicacionDefinida = "cualquiera";
       pasoPendiente = null;
-    } else if (mencionaUbicacionActual || message.length > 2) {
-      ubicacionDefinida = message;
+    } else if (ubicacionDetectada || message.trim().length > 1) {
+      // Aceptamos cualquier ciudad/región que escriba
+      ubicacionDefinida = message.trim();
       pasoPendiente = null;
     }
   }
 
-  // También actualizamos de forma "natural" por si el usuario se adelanta
-  if (!areaDefinida && mencionaAreaActual) {
-    areaDefinida = message;
-  } else if (!areaDefinida && usaCvComoArea) {
-    areaDefinida = "desde_cv";
+  // Si aún no se inició el flujo pero ya habla de trabajo
+  if (hablaTrabajo && !areaDefinida && !pasoPendiente) {
+    pasoPendiente = "area";
   }
 
-  if (!modalidadDefinida) {
-    if (mencionaIndiferente) {
-      modalidadDefinida = "cualquiera";
-    } else if (mencionaRemoto) {
-      modalidadDefinida = "remoto";
-    } else if (mencionaHibrido) {
-      modalidadDefinida = "hibrido";
-    } else if (mencionaPresencial) {
-      modalidadDefinida = "presencial";
-    }
-  }
-
-  if (!ubicacionDefinida) {
-    if (mencionaIndiferente && modalidadDefinida && (modalidadDefinida === "hibrido" || modalidadDefinida === "presencial")) {
-      ubicacionDefinida = "cualquiera";
-    } else if (mencionaUbicacionActual) {
-      ubicacionDefinida = message;
-    }
-  }
-
-  // ── Cálculo de flags a partir del flujo ─────────────────
+  // ─────────────────────────────────────────────
+  // CÁLCULO DE FLAGS
+  // ─────────────────────────────────────────────
 
   const requiereUbicacion =
     modalidadDefinida === "hibrido" || modalidadDefinida === "presencial";
 
-  // Paso pendiente manda:
   const debePreguntarArea = pasoPendiente === "area";
   const debePreguntarModalidad = pasoPendiente === "modalidad";
   const debePreguntarUbicacion = pasoPendiente === "ubicacion";
@@ -219,7 +251,6 @@ app.post("/api/chat", async (req, res) => {
     (!requiereUbicacion || !!ubicacionDefinida) &&
     pasoPendiente === null;
 
-  // Log de depuración
   console.log("DEBUG ESTADO:", {
     hablaTrabajo,
     areaDefinida,
@@ -231,6 +262,10 @@ app.post("/api/chat", async (req, res) => {
     debePreguntarUbicacion,
     listoParaRecomendar,
   });
+
+  // ─────────────────────────────────────────────
+  // SYSTEM PROMPT PARA LA IA
+  // ─────────────────────────────────────────────
 
   const systemPrompt = `
 Eres un orientador laboral experto. Trabajas con el CV del usuario, sus preferencias y el siguiente CSV de ofertas para ayudarle a encontrar los mejores empleos posibles.
@@ -246,23 +281,36 @@ ESTADO (NO SE LO DIGAS AL USUARIO):
 - debePreguntarUbicacion = ${debePreguntarUbicacion ? "sí" : "no"}
 - listoParaRecomendar = ${listoParaRecomendar ? "sí" : "no"}
 
-1) FLUJO DE PREGUNTAS (REGLA ESTRICTA)
+REGLA GLOBAL MUY IMPORTANTE:
+- SOLO puedes hacer **UNA** de estas cosas en cada turno:
+  1) Preguntar por área,
+  2) Preguntar por modalidad,
+  3) Preguntar por ubicación,
+  4) O recomendar empleos.
+- NUNCA combines dos de estas acciones en la misma respuesta.
+
+1) FLUJO DE PREGUNTAS (ESTRUCTURA OBLIGATORIA)
 ------------------------------------------------
 A) Si "debePreguntarArea" = "sí":
-   ➤ Responde EN ESTE TURNO SOLO con esta pregunta:
+   ➤ Tu respuesta DEBE ser SOLO esta pregunta (y nada más):
    "¿Tienes alguna área de interés específica (por ejemplo: datos, desarrollo web, soporte, ciberseguridad, UX, marketing, etc.) o prefieres que use lo que aparece en tu CV?"
-   ➤ No recomiendes empleos todavía, no hables de empresas, ni de porcentajes de match, ni analices el CSV.
+   ➤ No recomiendes empleos.
+   ➤ No pidas modalidad ni ubicación.
+   ➤ No hables del CSV ni del porcentaje de match.
+   ➤ Responde en un solo párrafo con esa pregunta, como máximo con una frase breve antes.
 
 B) Si "debePreguntarArea" = "no" Y "debePreguntarModalidad" = "sí":
-   ➤ Responde EN ESTE TURNO SOLO con esta pregunta:
+   ➤ Tu respuesta DEBE ser SOLO esta pregunta:
    "¿Qué modalidad prefieres: remoto, híbrido, presencial o me da lo mismo?"
-   (Aclara que si dices "me da lo mismo" consideraré todas las modalidades.)
-   ➤ No recomiendes empleos todavía.
+   ➤ No recomiendes empleos.
+   ➤ No pidas ubicación.
+   ➤ No hables del CSV ni del porcentaje de match.
 
 C) Si "debePreguntarArea" = "no", "debePreguntarModalidad" = "no" Y "debePreguntarUbicacion" = "sí":
-   ➤ Responde EN ESTE TURNO SOLO con esta pregunta:
+   ➤ Tu respuesta DEBE ser SOLO esta pregunta:
    "¿En qué ciudad o región te gustaría trabajar? Si te da lo mismo la ubicación, también puedes decir 'me da lo mismo'."
-   ➤ No recomiendes empleos todavía.
+   ➤ No recomiendes empleos.
+   ➤ No hables del CSV ni del porcentaje de match.
 
 D) Solo si "listoParaRecomendar" = "sí":
    ➤ Puedes usar el CSV de ofertas y recomendar empleos, siguiendo las reglas de abajo.
@@ -274,7 +322,7 @@ D) Solo si "listoParaRecomendar" = "sí":
   - Fortalezas detectadas.
   - Áreas mejorables.
   - Nivel técnico aproximado.
-  - Un pequeño resumen de quién es el candidato.
+  - Un pequeño resumen de quién es el/la candidato/a.
 
 - Si NO hay CV, igual puedes orientar, pero sugiérele subir uno para mejorar la recomendación.
 
@@ -309,7 +357,7 @@ Al recomendar empleos, sigue SIEMPRE este orden:
    - Estimación mental:
      - Hasta 50%: similitud de habilidades/tecnologías entre el CV y "habilidades".
      - Hasta 30%: encaje entre experiencia requerida y experiencia del candidato.
-     - Hasta 20%: alineación con el área de interés.
+     - Hasta 20%: alineación con el área de interés (texto de "areaDefinida").
 
    - No expliques la fórmula; solo usa un porcentaje razonable entre 0% y 100%.
 
@@ -331,8 +379,8 @@ Al recomendar empleos, sigue SIEMPRE este orden:
 - Lenguaje natural, cercano y motivador.
 - Usa Markdown simple: **negritas**, listas, párrafos cortos.
 - Evita repetir textualmente lo mismo muchas veces.
-- No inventes datos del CSV.
-- Si todavía falta información para recomendar, sigue estrictamente las reglas del flujo de preguntas anterior.
+- No inventes datos del CSV (usa solo lo que está en el texto).
+- Respeta SIEMPRE el flujo de preguntas anterior cuando falte información.
 `;
 
   try {
@@ -372,5 +420,6 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Servidor IA corriendo en el puerto ${PORT}`);
 });
+
 
 
